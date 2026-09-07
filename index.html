@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HYP3 Accounts</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="img/logo/hyp3-logo.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 60px 24px; }
+  .admin-login { max-width: 380px; margin: 100px auto; padding: 40px; background: var(--panel); border: 1px solid var(--line); }
+  .admin-login input { width: 100%; padding: 13px 16px; margin-bottom: 14px; background: var(--void); border: 1px solid var(--line); color: var(--ink); }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 26px 0; }
+  .stat-card { padding: 22px; background: var(--panel); border: 1px solid var(--line); text-align: center; }
+  .stat-card.profit { border-color: var(--line-strong); }
+  .stat-card .num { font-family: var(--font-d); font-size: 26px; font-weight: 800; color: var(--mint); }
+  .stat-card .num.negative { color: #ff6b6b; }
+  .stat-card .label { font-size: 12px; color: var(--ink-dim); margin-top: 6px; }
+  .range-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+  .range-tab { padding: 10px 20px; border: 1px solid var(--line); cursor: pointer; color: var(--ink-dim); font-size: 13px; }
+  .range-tab.active { color: #04120d; background: var(--grad); border-color: transparent; }
+  table.acc-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  table.acc-table th, table.acc-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; }
+  table.acc-table th { color: var(--mint); font-family: var(--font-d); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  #admin-error { color: #ff6b6b; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .expense-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; margin: 16px 0 30px; }
+  .expense-form input, .expense-form select { padding: 12px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
+  .section-title { margin-top: 40px; margin-bottom: 6px; }
+  .note-text { font-size: 12px; color: var(--ink-faint); margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div id="login-screen" class="admin-login">
+  <h2 style="margin-bottom:20px;">HYP3 Accounts</h2>
+  <p style="font-size:12.5px;margin-bottom:16px;">Private — only visible to whoever has the admin key.</p>
+  <input type="password" id="admin-key-input" placeholder="Admin key">
+  <button class="normal" style="width:100%;text-align:center;" onclick="loginAdmin()">Enter</button>
+  <div id="admin-error"></div>
+</div>
+
+<div id="dashboard-screen" class="admin-wrap" style="display:none;">
+  <h2>HYP3 Accounts</h2>
+  <p style="margin-bottom:20px;">Revenue, real production cost, expenses, and net profit — at a glance.</p>
+
+  <div class="range-tabs">
+    <div class="range-tab" data-range="week">This Week</div>
+    <div class="range-tab active" data-range="month">This Month</div>
+    <div class="range-tab" data-range="year">This Year</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num" id="stat-visits">—</div><div class="label">Site Visits</div></div>
+    <div class="stat-card"><div class="num" id="stat-orders">—</div><div class="label">Orders Placed</div></div>
+    <div class="stat-card"><div class="num" id="stat-revenue">—</div><div class="label">Revenue (EGP)</div></div>
+    <div class="stat-card"><div class="num" id="stat-cogs">—</div><div class="label">Cost of Goods (EGP)</div></div>
+    <div class="stat-card"><div class="num" id="stat-expenses">—</div><div class="label">Expenses (EGP)</div></div>
+    <div class="stat-card profit"><div class="num" id="stat-netprofit">—</div><div class="label">Net Profit (EGP)</div></div>
+  </div>
+  <p class="note-text" id="unknown-cost-note"></p>
+
+  <button class="normal" onclick="downloadPDF()"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>
+
+  <h3 class="section-title">Add an Expense</h3>
+  <p class="note-text">Packaging, marketing, rent, supplies — anything that isn't cost of goods.</p>
+  <div class="expense-form">
+    <select id="exp-category">
+      <option>Packaging</option>
+      <option>Marketing</option>
+      <option>Rent</option>
+      <option>Supplies</option>
+      <option>Delivery</option>
+      <option>Other</option>
+    </select>
+    <input type="number" id="exp-amount" placeholder="Amount (EGP)">
+    <input type="text" id="exp-note" placeholder="Note (optional)">
+    <button class="normal" onclick="addExpense()">Add</button>
+  </div>
+
+  <h3 class="section-title">Recent Orders</h3>
+  <div style="overflow-x:auto;">
+    <table class="acc-table">
+      <thead><tr><th>Date</th><th>Items</th><th>Promo</th><th>Subtotal</th><th>Discount</th><th>Total</th></tr></thead>
+      <tbody id="orders-tbody"></tbody>
+    </table>
+  </div>
+
+  <h3 class="section-title">Recent Expenses</h3>
+  <div style="overflow-x:auto;">
+    <table class="acc-table">
+      <thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th></tr></thead>
+      <tbody id="expenses-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  let currentRange = "month";
+  let currentData = null;
+
+  function adminKey() { return localStorage.getItem("HYP3_admin_key"); }
+
+  function loginAdmin() {
+    const key = document.getElementById("admin-key-input").value.trim();
+    if (!key) return;
+    localStorage.setItem("HYP3_admin_key", key);
+    document.getElementById("admin-error").innerText = "";
+    loadStats();
+  }
+
+  async function loadStats() {
+    const key = adminKey();
+    if (!key) return;
+
+    try {
+      const res = await fetch(`/api/stats?key=${encodeURIComponent(key)}&range=${currentRange}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        localStorage.removeItem("HYP3_admin_key");
+        document.getElementById("admin-error").innerText = "Wrong admin key.";
+        document.getElementById("login-screen").style.display = "block";
+        document.getElementById("dashboard-screen").style.display = "none";
+        return;
+      }
+
+      currentData = data;
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("dashboard-screen").style.display = "block";
+
+      document.getElementById("stat-visits").innerText = data.visitCount;
+      document.getElementById("stat-orders").innerText = data.orderCount;
+      document.getElementById("stat-revenue").innerText = data.revenue.toFixed(2);
+      document.getElementById("stat-cogs").innerText = data.cogs.toFixed(2);
+      document.getElementById("stat-expenses").innerText = data.totalExpenses.toFixed(2);
+      const netEl = document.getElementById("stat-netprofit");
+      netEl.innerText = data.netProfit.toFixed(2);
+      netEl.classList.toggle("negative", data.netProfit < 0);
+
+      const noteEl = document.getElementById("unknown-cost-note");
+      noteEl.innerText = data.unknownCostItems > 0
+        ? `Note: ${data.unknownCostItems} order line(s) placed before cost-tracking was set up aren't included in the cost total above.`
+        : "";
+
+      const otbody = document.getElementById("orders-tbody");
+      otbody.innerHTML = data.orders.length === 0
+        ? `<tr><td colspan="6" style="text-align:center;color:var(--ink-faint);">No orders in this period yet.</td></tr>`
+        : data.orders.map(o => `
+          <tr>
+            <td>${new Date(o.ts).toLocaleDateString()}</td>
+            <td>${o.items}</td>
+            <td>${o.promo_code || "—"}</td>
+            <td>${o.subtotal.toFixed(2)}</td>
+            <td>${o.discount.toFixed(2)}</td>
+            <td><strong>${o.total.toFixed(2)}</strong></td>
+          </tr>`).join("");
+
+      const etbody = document.getElementById("expenses-tbody");
+      etbody.innerHTML = data.expenses.length === 0
+        ? `<tr><td colspan="4" style="text-align:center;color:var(--ink-faint);">No expenses logged in this period yet.</td></tr>`
+        : data.expenses.map(e => `
+          <tr>
+            <td>${new Date(e.ts).toLocaleDateString()}</td>
+            <td>${e.category}</td>
+            <td>${e.note || "—"}</td>
+            <td>${e.amount.toFixed(2)}</td>
+          </tr>`).join("");
+    } catch (err) {
+      document.getElementById("admin-error").innerText = "Could not reach the server. Is the dashboard deployed yet?";
+    }
+  }
+
+  async function addExpense() {
+    const category = document.getElementById("exp-category").value;
+    const amount = parseFloat(document.getElementById("exp-amount").value);
+    const note = document.getElementById("exp-note").value.trim();
+    if (!amount || amount <= 0) return;
+
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: adminKey(), category, amount, note }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById("exp-amount").value = "";
+        document.getElementById("exp-note").value = "";
+        loadStats();
+      }
+    } catch (err) {}
+  }
+
+  function downloadPDF() {
+    if (!currentData) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(20);
+    doc.text("HYP3 Perfume — Accounts Report", 14, 20);
+    doc.setFontSize(11);
+    doc.text(`Range: ${currentData.range} (since ${new Date(currentData.since).toLocaleDateString()})`, 14, 30);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 37);
+
+    doc.setFontSize(14);
+    doc.text("Summary", 14, 50);
+    doc.setFontSize(11);
+    doc.text(`Site Visits: ${currentData.visitCount}`, 14, 58);
+    doc.text(`Orders Placed: ${currentData.orderCount}`, 14, 65);
+    doc.text(`Revenue: ${currentData.revenue.toFixed(2)} EGP`, 14, 72);
+    doc.text(`Cost of Goods: ${currentData.cogs.toFixed(2)} EGP`, 14, 79);
+    doc.text(`Gross Profit: ${currentData.grossProfit.toFixed(2)} EGP`, 14, 86);
+    doc.text(`Expenses: ${currentData.totalExpenses.toFixed(2)} EGP`, 14, 93);
+    doc.setFontSize(13);
+    doc.text(`Net Profit: ${currentData.netProfit.toFixed(2)} EGP`, 14, 103);
+
+    let y = 118;
+    doc.setFontSize(14);
+    doc.text("Orders", 14, y);
+    y += 8;
+    doc.setFontSize(9);
+    currentData.orders.forEach(o => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`${new Date(o.ts).toLocaleDateString()}  ${(o.items||"").slice(0,50)}  Total: ${o.total.toFixed(2)} EGP`, 14, y);
+      y += 6;
+    });
+
+    y += 8;
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(14);
+    doc.text("Expenses", 14, y);
+    y += 8;
+    doc.setFontSize(9);
+    currentData.expenses.forEach(e => {
+      if (y > 280) { doc.addPage(); y = 20; }
+      doc.text(`${new Date(e.ts).toLocaleDateString()}  ${e.category}  ${e.note||""}  ${e.amount.toFixed(2)} EGP`, 14, y);
+      y += 6;
+    });
+
+    doc.save(`HYP3-accounts-${currentData.range}-${new Date().toISOString().slice(0,10)}.pdf`);
+  }
+
+  document.querySelectorAll(".range-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".range-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      currentRange = tab.dataset.range;
+      loadStats();
+    });
+  });
+
+  window.addEventListener("DOMContentLoaded", () => {
+    if (adminKey()) loadStats();
+  });
+</script>
+
+</body>
+</html>
