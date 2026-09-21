@@ -1,0 +1,1 @@
+name = "hyp3-store" compatibility_date = "2026-09-21" [[d1_databases]] binding = "DB" database_name = "hyp3_db" database_id = "a8a9893c-7f83-4801-9592-2f673b786d28"
